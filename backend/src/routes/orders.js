@@ -32,6 +32,7 @@ function toCamelOrder(row, { includeGuestToken = false } = {}) {
     total: Number(row.total),
     status: row.status,
     paymentProofUrl: row.payment_proof_url,
+    hasPaymentProof: !!(row.payment_proof_key || row.payment_proof_url),
     isGuestOrder: row.buyer_id === null,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
