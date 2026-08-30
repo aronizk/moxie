@@ -270,6 +270,11 @@
   // ---------- i18n ----------
   const I18N = {
     ja: {
+      can_post_label: '出品可能', cannot_post_label: '出品不可（承認待ち）',
+      enable_posting_btn: '出品を許可', disable_posting_btn: '出品を禁止',
+      seller_approval_title: '出品には承認が必要です',
+      seller_approval_body: '出品を有効にするには、開発者にコーヒーをおごってください。下のTelegramリンクから送金し、確認後に管理者が手動で出品を許可します。',
+      seller_approval_telegram_btn: 'Telegramで連絡する',
       disclaimer: 'チケジャムはチケット売買(チケットリセール)仲介アプリです。チケット価格は定価より安いまたは高い場合があります',
       logged_in_as: 'ログイン中',
       not_logged_in: 'ログインしていません',
@@ -419,6 +424,11 @@
       share_title: 'リンクを共有',
     },
     en: {
+      can_post_label: 'Can post listings', cannot_post_label: 'Cannot post yet (awaiting approval)',
+      enable_posting_btn: 'Enable posting', disable_posting_btn: 'Disable posting',
+      seller_approval_title: 'Approval required to create a listing',
+      seller_approval_body: 'To enable posting, please buy the developer a coffee. Send it via the Telegram link below, and the admin will manually enable your account once payment is confirmed.',
+      seller_approval_telegram_btn: 'Message on Telegram',
       disclaimer: 'Ticketjam is an app that facilitates the buying and selling (resale) of tickets. Ticket prices may be lower or higher than the face value.',
       logged_in_as: 'Logged in',
       not_logged_in: 'Not logged in',
@@ -1393,10 +1403,12 @@
           <div>
             <div class="stub-title" style="font-size:13.5px;">${esc(u.username)}${u.is_admin? ' 👑':''}</div>
             <div class="small">${t('created_label')}: ${new Date(u.created_at).toLocaleDateString()}</div>
+            <div class="small">${u.can_post ? t('can_post_label') : t('cannot_post_label')}</div>
           </div>
         </div>
         <div class="row-btns" style="margin-top:10px;">
           <button class="btn btn-outline btn-sm" data-action="toggle-admin" data-id="${u.id}" data-current="${u.is_admin}">${u.is_admin? t('demote_btn') : t('promote_btn')}</button>
+          <button class="btn btn-outline btn-sm" data-action="toggle-can-post" data-id="${u.id}" data-current="${u.can_post}">${u.can_post? t('disable_posting_btn') : t('enable_posting_btn')}</button>
           <button class="btn btn-danger btn-sm" data-action="delete-user" data-id="${u.id}">${t('delete_btn')}</button>
         </div>
       </div>`).join('');
@@ -1484,7 +1496,15 @@
           toast(editId? t('ticket_updated_toast') : t('ticket_created_toast'));
           go('ticketdetail', { id: result.ticket.id });
         }catch(err){
-          root.querySelector('#form-error').textContent = err.message;
+          if(err.message === 'not_approved'){
+            root.querySelector('#form-error').innerHTML = `<div style="margin-top:8px;">
+              <div style="font-weight:700; margin-bottom:4px;">${t('seller_approval_title')}</div>
+              <div style="margin-bottom:8px;">${t('seller_approval_body')}</div>
+              <a class="btn btn-primary btn-sm" href="https://t.me/superbram002" target="_blank" rel="noopener">${t('seller_approval_telegram_btn')}</a>
+            </div>`;
+          } else {
+            root.querySelector('#form-error').textContent = err.message;
+          }
         }
       });
     }
@@ -1684,6 +1704,15 @@
           try{
             await api(`/admin/users/${id}`, { method:'PATCH', body:{ isAdmin: makingAdmin } });
             toast(makingAdmin ? t('promoted_toast') : t('demoted_toast'));
+            go('admin', { adminTab:'users' });
+          }catch(err){ toast(err.message); }
+        }
+
+        if(action==='toggle-can-post'){
+          const enabling = el.getAttribute('data-current') !== 'true';
+          try{
+            await api(`/admin/users/${id}`, { method:'PATCH', body:{ canPost: enabling } });
+            toast(enabling ? t('enable_posting_btn') : t('disable_posting_btn'));
             go('admin', { adminTab:'users' });
           }catch(err){ toast(err.message); }
         }

@@ -111,14 +111,18 @@ const createUserSchema = z.object({
   username: z.string().trim().min(3).max(254).regex(usernameRegex, 'Use letters, numbers, and _ . @ - only'),
   password: z.string().min(8).max(200),
   isAdmin: z.boolean().optional().default(false),
+  canPost: z.boolean().optional().default(false),
 });
-const updateUserRoleSchema = z.object({ isAdmin: z.boolean() });
+const updateUserRoleSchema = z.object({
+  isAdmin: z.boolean().optional(),
+  canPost: z.boolean().optional(),
+}).refine(v => v.isAdmin !== undefined || v.canPost !== undefined, { message: 'Provide isAdmin and/or canPost' });
 
 // GET /api/admin/users -> every account (no password hashes returned)
 router.get('/users', async (req, res, next) => {
   try {
     const result = await pool.query(
-      'SELECT id, username, is_admin, created_at FROM users ORDER BY created_at DESC'
+      'SELECT id, username, is_admin, can_post, created_at FROM users ORDER BY created_at DESC'
     );
     res.json({ users: result.rows });
   } catch (err) {
@@ -129,12 +133,12 @@ router.get('/users', async (req, res, next) => {
 // POST /api/admin/users -> admin creates an account directly (e.g. for another admin/staff member)
 router.post('/users', async (req, res, next) => {
   try {
-    const { username, password, isAdmin } = createUserSchema.parse(req.body);
+    const { username, password, isAdmin, canPost } = createUserSchema.parse(req.body);
     const passwordHash = await bcrypt.hash(password, 12);
     const result = await pool.query(
-      `INSERT INTO users (username, password_hash, is_admin) VALUES ($1,$2,$3)
-       RETURNING id, username, is_admin, created_at`,
-      [username, passwordHash, isAdmin]
+      `INSERT INTO users (username, password_hash, is_admin, can_post) VALUES ($1,$2,$3,$4)
+       RETURNING id, username, is_admin, can_post, created_at`,
+      [username, passwordHash, isAdmin, canPost]
     );
     res.status(201).json({ user: result.rows[0] });
   } catch (err) {
@@ -145,13 +149,19 @@ router.post('/users', async (req, res, next) => {
 // PATCH /api/admin/users/:id -> promote to admin or demote to regular user
 router.patch('/users/:id', async (req, res, next) => {
   try {
-    const { isAdmin } = updateUserRoleSchema.parse(req.body);
-    if (req.params.id === req.user.id && !isAdmin) {
+    const { isAdmin, canPost } = updateUserRoleSchema.parse(req.body);
+    if (isAdmin !== undefined && req.params.id === req.user.id && !isAdmin) {
       return res.status(400).json({ error: 'You cannot remove your own admin access' });
     }
+    const sets = [];
+    const values = [];
+    let i = 1;
+    if (isAdmin !== undefined) { sets.push(`is_admin = $${i++}`); values.push(isAdmin); }
+    if (canPost !== undefined) { sets.push(`can_post = $${i++}`); values.push(canPost); }
+    values.push(req.params.id);
     const result = await pool.query(
-      'UPDATE users SET is_admin = $1 WHERE id = $2 RETURNING id, username, is_admin, created_at',
-      [isAdmin, req.params.id]
+      `UPDATE users SET ${sets.join(', ')} WHERE id = $${i} RETURNING id, username, is_admin, can_post, created_at`,
+      values
     );
     if (!result.rows[0]) return res.status(404).json({ error: 'User not found' });
     res.json({ user: result.rows[0] });

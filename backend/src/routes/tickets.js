@@ -118,6 +118,12 @@ router.get('/:id', optionalAuth, async (req, res, next) => {
 // POST /api/tickets -> create (any authenticated user)
 router.post('/', requireAuth, async (req, res, next) => {
   try {
+    if (!req.user.isAdmin) {
+      const approval = await pool.query('SELECT can_post FROM users WHERE id = $1', [req.user.id]);
+      if (!approval.rows[0] || !approval.rows[0].can_post) {
+        return res.status(403).json({ error: 'not_approved' });
+      }
+    }
     const t = ticketSchema.parse(req.body);
     const result = await pool.query(
       `INSERT INTO tickets (

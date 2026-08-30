@@ -28,13 +28,13 @@ router.post('/register', async (req, res, next) => {
 
     const result = await pool.query(
       `INSERT INTO users (username, password_hash) VALUES ($1, $2)
-       RETURNING id, username, is_admin, created_at`,
+       RETURNING id, username, is_admin, can_post, created_at`,
       [username, passwordHash]
     );
 
     const user = result.rows[0];
     const token = signToken(user);
-    res.status(201).json({ token, user: { id: user.id, username: user.username, isAdmin: user.is_admin } });
+    res.status(201).json({ token, user: { id: user.id, username: user.username, isAdmin: user.is_admin, canPost: user.can_post } });
   } catch (err) {
     next(err);
   }
@@ -53,7 +53,7 @@ router.post('/login', async (req, res, next) => {
     if (!ok) return res.status(401).json({ error: 'Invalid username or password' });
 
     const token = signToken(user);
-    res.json({ token, user: { id: user.id, username: user.username, isAdmin: user.is_admin } });
+    res.json({ token, user: { id: user.id, username: user.username, isAdmin: user.is_admin, canPost: user.can_post } });
   } catch (err) {
     next(err);
   }
@@ -63,7 +63,7 @@ router.post('/login', async (req, res, next) => {
 router.get('/me', requireAuth, async (req, res, next) => {
   try {
     const result = await pool.query(
-      'SELECT id, username, is_admin, created_at FROM users WHERE id = $1',
+      'SELECT id, username, is_admin, can_post, created_at FROM users WHERE id = $1',
       [req.user.id]
     );
     if (!result.rows[0]) return res.status(404).json({ error: 'User not found' });
